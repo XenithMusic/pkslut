@@ -4,11 +4,36 @@ import urllib.request
 import struct,shutil
 import pkserr
 
-PKS_FORMAT_VERSION = 1
+PKS_FORMAT_VERSION = 2
+"""
+PKS changelog:
+v1: Initial
+v2: Add Repository Identification
+	+ Repository Identifier.
+		COMPATIBILITY is now in the format:
+		`PackageName:Repository:>=VERSION`
+		instead of
+		`PackageName:>=VERSION`
+"""
+
+def sys(x):
+	print(f"{LIGHT_RED}>>> {RESET}{x}")
+	os.system(x)
+
 DEBUGGING_ENABLED = False
 
 temp = os.environ.get("TEMP",os.environ.get("TMPDIR","/var/tmp")).rstrip("/")
 home = os.environ.get('HOME').rstrip("/")
+
+def verifyOperation(default="y"):
+	a,b = "Y","n"
+	if default.lower() == "n": a,b = "y","N"
+	pick = input(f"{ORANGE}{locale.verify}{YELLOW}" % (a,b))
+	print(f"{RESET}",end="")
+	if pick.lower() in ["y","n"]:
+		return pick.lower() == "y"
+	else:
+		return default
 
 def MakeTemp(purpose):
 	"""
@@ -88,14 +113,14 @@ def InstallPackageLocal(path:str):
 	os.makedirs(f"{home}/.pkslut-packages/{strpkname}")
 	with open(f"{temp}/pkslut/extract/archive.zip","wb") as f:
 		f.write(archive)
-	os.system(f"unzip {temp}/pkslut/extract/archive.zip -d {home}/.pkslut-packages/{strpkname}")
+	sys(f"unzip {temp}/pkslut/extract/archive.zip -d {home}/.pkslut-packages/{strpkname}")
 	with open(f"{home}/.pkslut-packages/{strpkname}/INSTALL.sh","wb") as f:
 		f.write(script)
 	with open(f"{home}/.pkslut-packages/{strpkname}/COMPATIBILITY.txt","wb") as f:
 		f.write(compat)
 	print(f"{LIGHT_CYAN}{locale.installation.execute}{RESET}")
-	os.system(f"chmod +x {home}/.pkslut-packages/{strpkname}/INSTALL.sh")
-	os.system(f"{home}/.pkslut-packages/{strpkname}/INSTALL.sh")
+	sys(f"chmod +x {home}/.pkslut-packages/{strpkname}/INSTALL.sh")
+	sys(f"{home}/.pkslut-packages/{strpkname}/INSTALL.sh")
 	return pkserr.SUCCESS
 
 def InstallPackageURL(url:str,name:str):
@@ -143,15 +168,29 @@ def InstallPackageRepo(name:str,repo:str):
 		See pkserr.py for error codes.
 	"""
 
-	print("Baller.")
-	print(f"Repo: {repo}")
-	print(f"Repos: {repr(config["repositories"])}")
-
 	if repo in config["repositories"]:
 		link = config["repositories"][repo].rstrip("/") + f"/{name}.pks"
 		return InstallPackageURL(link,name)
 	else:
 		return pkserr.REPO_MISSING
+
+def RemovePackage(name:str):
+	"""
+	Uninstalls a installed package.
+
+	Parameters:
+	- Package Name
+
+	Returns:
+	- Status Code
+		See pkserr.py for error codes.
+	"""
+
+	if ".." in name:
+		return pkserr.UNSAFE
+
+	shutil.rmtree(f"{home}/.pkslut-packages/{name}")
+	return pkserr.SUCCESS
 
 def MakePackage(pkname,_pkversion,assets,output):
 	"""
@@ -169,6 +208,9 @@ def MakePackage(pkname,_pkversion,assets,output):
 	- Status Code
 		See pkserr.py for error codes.
 	"""
+
+	if ".." in pkname:
+		return pkserr.UNSAFE
 
 	MakeTemps(["pack"])
 
@@ -217,7 +259,7 @@ def MakePackage(pkname,_pkversion,assets,output):
 
 	# Pack the archive.
 	print(f"{LIGHT_CYAN}- {locale.packaging.archive}{RESET}") # Encoding archive...
-	os.system(f"""cd {temp}/pkslut/packaging/PACKAGE_ASSETS && \
+	sys(f"""cd {temp}/pkslut/packaging/PACKAGE_ASSETS && \
 zip -r {temp}/pkslut/packaging/archive.zip ./*""")
 	print(os.listdir(f"{temp}/pkslut/packaging"))
 	with open(f"{temp}/pkslut/packaging/archive.zip","rb") as f:
@@ -256,8 +298,20 @@ def invoke():
 		metavar="REPOSITORY",
 		default=config["defaultRepo"])
 
-	subparsers.add_parser("remove",
+	md_reinstall = subparsers.add_parser("reinstall",
+		help="Reinstall a package.",)
+	md_reinstall.set_defaults(mode="reinstall")
+	md_reinstall.add_argument("package",
+		help="Target package to reinstall.")
+	md_reinstall.add_argument("-r","--repo",
+		help="Target repo to reinstall from.",
+		default=config["defaultRepo"])
+
+	md_remove = subparsers.add_parser("remove",
 		help="Remove a package.",)
+	md_remove.set_defaults(mode="remove")
+	md_remove.add_argument("package",
+		help="Target package to remove.")
 
 	subparsers.add_parser("info",
 		help="Fetch information about a package.",)
@@ -307,13 +361,37 @@ def invoke():
 
 	print(args)
 	match args.mode:
-		case "install":
-			print(f"{GREEN}{locale.installation.startRepo}{RESET}" % (args.package,args.repo))
-			a = InstallPackageRepo(args.package,args.repo)
+		case "reinstall":
+			print(f"{GREEN}{locale.reinstall.start}{RESET}" % (args.package))
+			a = RemovePackage(args.package)
 			if a >= 0:
-				print(f"{GREEN}{locale.installation.successname}{RESET}" % args.package)
+				a = InstallPackageRepo(args.package,args.repo)
+				if a >= 0:
+					print(f"{GREEN}{locale.reinstall.success}{RESET}" % args.package)
+				elif a < 0:
+					print(f"{RED}{locale.reinstall.failure}{RESET}" % (args.package,locale.errors[a]))
 			elif a < 0:
-				print(f"{RED}{locale.installation.failurename}{RESET}" % (args.package,locale.errors[a]))
+				print(f"{RED}{locale.reinstall.failure}{RESET}" % (args.package,locale.errors[a]))
+		case "remove":
+			if verifyOperation():
+				print(f"{GREEN}{locale.removal.start}{RESET}" % (args.package))
+				a = RemovePackage(args.package)
+				if a >= 0:
+					print(f"{GREEN}{locale.packaging.success}{RESET}" % args.package)
+				elif a < 0:
+					print(f"{RED}{locale.packaging.failure}{RESET}" % (args.package,locale.errors[a]))
+			else:
+				print(f"{RED}{locale.cancelled}{RESET}")
+		case "install":
+			if verifyOperation():
+				print(f"{GREEN}{locale.installation.startRepo}{RESET}" % (args.package,args.repo))
+				a = InstallPackageRepo(args.package,args.repo)
+				if a >= 0:
+					print(f"{GREEN}{locale.installation.successname}{RESET}" % args.package)
+				elif a < 0:
+					print(f"{RED}{locale.installation.failurename}{RESET}" % (args.package,locale.errors[a]))
+			else:
+				print(f"{RED}{locale.cancelled}{RESET}")
 		case "pack":
 			print(f"{GREEN}{locale.packaging.start}{RESET}" % (args.name,args.version,args.package))
 			a = MakePackage(args.name,args.version,args.package,args.output or (args.name + ".pks"))

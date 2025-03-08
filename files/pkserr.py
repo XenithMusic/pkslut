@@ -43,6 +43,11 @@ Returned when a package is already installed.
 ALREADY_INSTALLED = -105
 
 """
+Returned when continuing an operation is unsafe.
+"""
+UNSAFE = -106
+
+"""
 Raised when a provided value to a PKS function is not what it should've been.
 eg. MakeTemp("asdf") >> UNEXPECTED
       Why? 'asdf' is not one of the expected values for `purpose`.

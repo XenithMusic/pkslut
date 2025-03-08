@@ -33,6 +33,7 @@ def generateTexts(loc):
 	locale.errors[-103] = "File does not exist."
 	locale.errors[-104] = "Repository does not exist."
 	locale.errors[-105] = "Package is already installed."
+	locale.errors[-106] = "Not safe to proceed."
 	locale.installation = Locale()
 	locale.installation.start = "Installing package %s!"
 	locale.installation.startRepo = "Installing package %s from %s!"
@@ -53,6 +54,16 @@ def generateTexts(loc):
 	locale.repository.removing = "Removing repository %s..."
 	locale.repository.removed = "Successfully removed repository %s..."
 	locale.repository.failure = "Failed to change repositories!\nError: %s"
+	locale.removal = Locale()
+	locale.removal.start = "Removing package %s..."
+	locale.removal.success = "Successfully removed package %s!"
+	locale.removal.failure = "Failed to remove package %s!\nError: %s"
+	locale.reinstall = Locale()
+	locale.reinstall.start = "Reinstalling package %s..."
+	locale.reinstall.success = "Successfully reinstalled package %s!"
+	locale.reinstall.failure = "Failed to reinstall package %s!\nError: %s"
+	locale.verify = "Do you want to continue? [%s/%s]: "
+	locale.cancelled = "Operation cancelled by user."
 	if loc == "de_DE":
 		pass # example for how to process
 	return locale
