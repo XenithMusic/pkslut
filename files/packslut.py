@@ -5,9 +5,10 @@ import struct,shutil
 import pkserr
 
 PKS_FORMAT_VERSION = 1
-DEBUGGING_ENABLED = True
+DEBUGGING_ENABLED = False
 
 temp = os.environ.get("TEMP",os.environ.get("TMPDIR","/var/tmp")).rstrip("/")
+home = os.environ.get('HOME').rstrip("/")
 
 def MakeTemp(purpose):
 	"""
@@ -82,17 +83,19 @@ def InstallPackageLocal(path:str):
 		script = remainder[1]
 		print(f"{LIGHT_CYAN}{locale.installation.archive}{RESET}")
 		archive = b"\x00".join(remainder[2:])
+	strpkname = pkname.decode("UTF-8")
 	print(f"{LIGHT_CYAN}{locale.installation.environment}{RESET}")
+	os.makedirs(f"{home}/.pkslut-packages/{strpkname}")
 	with open(f"{temp}/pkslut/extract/archive.zip","wb") as f:
 		f.write(archive)
-	os.system(f"unzip {temp}/pkslut/extract/archive.zip -d {temp}/pkslut/extract/archive")
-	with open(f"{temp}/pkslut/extract/archive/INSTALL.sh","wb") as f:
+	os.system(f"unzip {temp}/pkslut/extract/archive.zip -d {home}/.pkslut-packages/{strpkname}")
+	with open(f"{home}/.pkslut-packages/{strpkname}/INSTALL.sh","wb") as f:
 		f.write(script)
-	with open(f"{temp}/pkslut/extract/archive/COMPATIBILITY.txt","wb") as f:
+	with open(f"{home}/.pkslut-packages/{strpkname}/COMPATIBILITY.txt","wb") as f:
 		f.write(compat)
 	print(f"{LIGHT_CYAN}{locale.installation.execute}{RESET}")
-	os.system(f"chmod +x {temp}/pkslut/extract/archive/INSTALL.sh")
-	os.system(f"{temp}/pkslut/extract/archive/INSTALL.sh")
+	os.system(f"chmod +x {home}/.pkslut-packages/{strpkname}/INSTALL.sh")
+	os.system(f"{home}/.pkslut-packages/{strpkname}/INSTALL.sh")
 	return pkserr.SUCCESS
 
 def InstallPackageURL(url:str,name:str):
@@ -111,14 +114,44 @@ def InstallPackageURL(url:str,name:str):
 		See pkserr.py for error codes.
 	"""
 
+	if name in os.listdir(f"{home}/.pkslut-packages"):
+		return pkserr.ALREADY_INSTALLED
+
 	MakeTemps(["download"])
 
 	print(f"{LIGHT_CYAN}{locale.installation.downloadURL}{RESET}" % (name,url))
 
 	urllib.request.urlretrieve(url,f"{temp}/pkslut/download/{name}.pks")
-	InstallPackageLocal(f"{temp}/pkslut/download/{name}.pks")
+	return InstallPackageLocal(f"{temp}/pkslut/download/{name}.pks")
 
-	return pkserr.SUCCESS
+def InstallPackageRepo(name:str,repo:str):
+	global config
+	"""
+	Installs a package from a configured repository.
+
+	Assumes the following:
+	- Repo is a valid key in Config["repositories"]
+	- Repo links to a branch head
+	- Name is a valid package in said branch
+
+	Parameters:
+	- Package File Name
+	- Repository Name
+
+	Returns:
+	- Status Code
+		See pkserr.py for error codes.
+	"""
+
+	print("Baller.")
+	print(f"Repo: {repo}")
+	print(f"Repos: {repr(config["repositories"])}")
+
+	if repo in config["repositories"]:
+		link = config["repositories"][repo].rstrip("/") + f"/{name}.pks"
+		return InstallPackageURL(link,name)
+	else:
+		return pkserr.REPO_MISSING
 
 def MakePackage(pkname,_pkversion,assets,output):
 	"""
@@ -134,6 +167,7 @@ def MakePackage(pkname,_pkversion,assets,output):
 
 	Returns:
 	- Status Code
+		See pkserr.py for error codes.
 	"""
 
 	MakeTemps(["pack"])
@@ -199,7 +233,7 @@ zip -r {temp}/pkslut/packaging/archive.zip ./*""")
 	return pkserr.SUCCESS
 
 def invoke():
-	global locale
+	global locale,config
 	from pksconf import Config
 	from pksloc import generateTexts
 	config = Config()
@@ -212,8 +246,15 @@ def invoke():
 		add_help=False)
 	pos = ap.add_argument_group("Positional Arguments")
 	subparsers = ap.add_subparsers(title="Modes",metavar="{ install, remove, info, ... }")
-	subparsers.add_parser("install",
-		help="Install a package.",)
+	md_install = subparsers.add_parser("install",
+		help="Install a package from a configured repository.",)
+	md_install.set_defaults(mode="install")
+	md_install.add_argument("package",
+		help="Target package to install.")
+	md_install.add_argument("-r","--repo",
+		help="Uses a specific repository instead of the default.",
+		metavar="REPOSITORY",
+		default=config["defaultRepo"])
 
 	subparsers.add_parser("remove",
 		help="Remove a package.",)
@@ -240,25 +281,20 @@ def invoke():
 	md_local.add_argument("package",
 		help="Target directory to make a .PKS from.")
 
-	md_repo = subparsers.add_parser("rm-repo",
+	md_rrepo = subparsers.add_parser("rm-repo",
 		help="Removes a repository.")
-	md_repo.set_defaults(mode="rm-repo")
-	md_repo.add_argument("name",
+	md_rrepo.set_defaults(mode="rm-repo")
+	md_rrepo.add_argument("name",
 		help="Name of the repository")
 
-	md_repo = subparsers.add_parser("add-repo",
+	md_arepo = subparsers.add_parser("add-repo",
 		help="Adds a repository.")
-	md_repo.set_defaults(mode="add-repo")
-	md_repo.add_argument("name",
+	md_arepo.set_defaults(mode="add-repo")
+	md_arepo.add_argument("name",
 		help="Name of the repository")
-	md_repo.add_argument("link",
+	md_arepo.add_argument("link",
 		help="Link to the directory containing all packages.")
 	# https://github.com/XenithMusic/pkslut-repo/raw/refs/heads/master/demoPackage.pks
-
-	installopts = ap.add_argument_group("Install options")
-	installopts.add_argument("-r","--repo",
-		help="Uses a specific repository instead of the default.",
-		metavar="REPOSITORY")
 
 	opts = ap.add_argument_group("Global options")
 	opts.add_argument("-h","--help",
@@ -271,6 +307,13 @@ def invoke():
 
 	print(args)
 	match args.mode:
+		case "install":
+			print(f"{GREEN}{locale.installation.startRepo}{RESET}" % (args.package,args.repo))
+			a = InstallPackageRepo(args.package,args.repo)
+			if a >= 0:
+				print(f"{GREEN}{locale.installation.successname}{RESET}" % args.package)
+			elif a < 0:
+				print(f"{RED}{locale.installation.failurename}{RESET}" % (args.package,locale.errors[a]))
 		case "pack":
 			print(f"{GREEN}{locale.packaging.start}{RESET}" % (args.name,args.version,args.package))
 			a = MakePackage(args.name,args.version,args.package,args.output or (args.name + ".pks"))
@@ -292,9 +335,29 @@ def invoke():
 			#		the above does NOT call __setitem__
 			#		SO, i have to do it manually as I've
 			#		done below. Python moment!
-			a = config["repositories"]
-			a[args.name] = args.link
-			config["repositories"] = a
+			try:
+				a = config["repositories"]
+				a[args.name] = args.link
+				config["repositories"] = a
+				print(f"{GREEN}{locale.repository.added}{RESET}" % (args.name,args.link))
+			except Exception as e:
+				print(f"{RED}{locale.repository.failure}{RESET}" % (""))
+				raise e
+		case "rm-repo":
+			print(f"{GREEN}{locale.repository.removing}{RESET}" % (args.name))
+
+			# HACK: config["repositories"][args.name]
+			#		the above does NOT call __setitem__
+			#		SO, i have to do it manually as I've
+			#		done below. Python moment!
+			try:
+				a = config["repositories"]
+				del a[args.name]
+				config["repositories"] = a
+				print(f"{GREEN}{locale.repository.removed}{RESET}" % (args.name))
+			except Exception as e:
+				print(f"{RED}{locale.repository.failure}{RESET}" % (""))
+				raise e
 
 	if DEBUGGING_ENABLED:
 		print(f"{LIGHT_RED}Breaking before temp dir cleanup for inspection.\n")

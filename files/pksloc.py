@@ -30,8 +30,12 @@ def generateTexts(loc):
 	locale.errors[-100] = "PKS file is too new/old."
 	locale.errors[-101] = "Expected a .PKS extension."
 	locale.errors[-102] = "File already exists."
+	locale.errors[-103] = "File does not exist."
+	locale.errors[-104] = "Repository does not exist."
+	locale.errors[-105] = "Package is already installed."
 	locale.installation = Locale()
 	locale.installation.start = "Installing package %s!"
+	locale.installation.startRepo = "Installing package %s from %s!"
 	locale.installation.downloadURL = "Downloading package %s from %s."
 	locale.installation.header = "Extracting header from package..."
 	locale.installation.compat = "Extracting compatibility information from package..."
@@ -45,6 +49,10 @@ def generateTexts(loc):
 	locale.installation.failure = "Failed to install package!\nError: %s"
 	locale.repository = Locale()
 	locale.repository.adding = "Adding repository %s @ %s..."
+	locale.repository.added = "Successfully added repository %s @ %s..."
+	locale.repository.removing = "Removing repository %s..."
+	locale.repository.removed = "Successfully removed repository %s..."
+	locale.repository.failure = "Failed to change repositories!\nError: %s"
 	if loc == "de_DE":
 		pass # example for how to process
 	return locale

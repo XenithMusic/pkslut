@@ -12,12 +12,20 @@ def getFn(x):
 
 	raise KeyError(f"Expected int/str/chrs/bool/eval, got {x}")
 
+def fromType(x):
+	t = type(x)
+	# if t == int: return "int"
+	# if t == str: return "str"
+	# if t == list and len([i for i in x if len(i) != 1]) == 0: return "chrs"
+	# if t == bool: return bool
+	return "eval"
+
 class Config:
 	def __init__(self):
 		self.loadConfig()
 	def saveConfig(self):
 		global CONFIG
-		CONFIG = [k+":"+repr(v) for k,v in CONFIG.items()]
+		CONFIG = [k+":"+fromType(v)+":"+repr(v) for k,v in CONFIG.items()]
 		print(CONFIG)
 		CONFIG = "\n".join(CONFIG)
 		print(CONFIG)
